@@ -1,0 +1,54 @@
+#UserDefine
+/MDK-ARM/RM_Frame_C
+/cmake-build-debug
+/.idea
+RM_Frame_C.uvguix.*
+MDK-ARM/JLinkLog.txt
+
+
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+
+# ---- 公开仓库补充忽略 ----
+/build/
+build/
+.DS_Store
+.idea/
+.vscode/
+*.elf
+*.bin
+*.hex
+*.map
+*.o
+*.obj
