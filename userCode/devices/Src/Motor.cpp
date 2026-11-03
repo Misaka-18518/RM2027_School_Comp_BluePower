@@ -96,13 +96,15 @@ void Motor::CANPackageSend() {
     txHeaderTypeDef.RTR = CAN_RTR_DATA;
     txHeaderTypeDef.TransmitGlobalTime = DISABLE;
 
+    uint32_t txMailbox;   // HAL 把实际使用的邮箱号写回这里（原来传的是地址 0x1 的野指针）
+
     if(motor_IDs & MOTOR_ID_CAN1_1_MASK) {
         for (int i = 0; i < 4; ++i) {
             canBuf[2 * i] = motor_intensity[i] >> 8u;
             canBuf[2 * i + 1] = motor_intensity[i];
         }
         txHeaderTypeDef.StdId = 0x200;
-        HAL_CAN_AddTxMessage(&hcan1, &txHeaderTypeDef, canBuf, (uint32_t *) CAN_TX_MAILBOX0);
+        HAL_CAN_AddTxMessage(&hcan1, &txHeaderTypeDef, canBuf, &txMailbox);
     }
 
     if(motor_IDs & MOTOR_ID_CAN1_2_MASK) {
@@ -111,7 +113,7 @@ void Motor::CANPackageSend() {
             canBuf[2 * i + 1] = motor_intensity[i + 4];
         }
         txHeaderTypeDef.StdId = 0x1FF;
-        HAL_CAN_AddTxMessage(&hcan1, &txHeaderTypeDef, canBuf, (uint32_t *) CAN_TX_MAILBOX0);
+        HAL_CAN_AddTxMessage(&hcan1, &txHeaderTypeDef, canBuf, &txMailbox);
     }
 
     if(motor_IDs & MOTOR_ID_CAN2_1_MASK) {
@@ -120,7 +122,7 @@ void Motor::CANPackageSend() {
             canBuf[2 * i + 1] = motor_intensity[i + 8];
         }
         txHeaderTypeDef.StdId = 0x200;
-        HAL_CAN_AddTxMessage(&hcan2, &txHeaderTypeDef, canBuf, (uint32_t *) CAN_TX_MAILBOX0);
+        HAL_CAN_AddTxMessage(&hcan2, &txHeaderTypeDef, canBuf, &txMailbox);
     }
 
     if(motor_IDs & MOTOR_ID_CAN2_2_MASK) {
@@ -129,7 +131,7 @@ void Motor::CANPackageSend() {
             canBuf[2 * i + 1] = motor_intensity[i + 12];
         }
         txHeaderTypeDef.StdId = 0x1FF;
-        HAL_CAN_AddTxMessage(&hcan2, &txHeaderTypeDef, canBuf, (uint32_t *) CAN_TX_MAILBOX0);
+        HAL_CAN_AddTxMessage(&hcan2, &txHeaderTypeDef, canBuf, &txMailbox);
     }
 }
 /**
@@ -226,19 +228,23 @@ void Motor::Handle(){
 void Motor::IT_Handle(CAN_HandleTypeDef *hcan) {
     uint8_t canBuf[8];
     CAN_RxHeaderTypeDef rx_header;
-    HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &rx_header, canBuf);
-    uint8_t canPos,motorPos;
-    if(hcan == &hcan1){
-        canPos = 0;
-    }else {
-        canPos = 1;
+    if (HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &rx_header, canBuf) != HAL_OK) {
+        return;
     }
-    motorPos = rx_header.StdId - 0x201;
-    motorPtrs[canPos][motorPos]->feedback.angle = (canBuf[0]<<8u)|canBuf[1];
-    motorPtrs[canPos][motorPos]->feedback.speed = (canBuf[2]<<8u)|canBuf[3];
-    motorPtrs[canPos][motorPos]->feedback.moment = (canBuf[4]<<8u)|canBuf[5];
-    motorPtrs[canPos][motorPos]->feedback.temp = canBuf[6];
-
+    // C620 反馈 ID 固定为 0x201~0x208；过滤器是全通，其他任何 ID 都不能拿来索引数组
+    if ((rx_header.IDE != CAN_ID_STD) || (rx_header.StdId < 0x201u) || (rx_header.StdId > 0x208u)) {
+        return;
+    }
+    uint8_t canPos = (hcan == &hcan1) ? 0u : 1u;
+    uint8_t motorPos = (uint8_t)(rx_header.StdId - 0x201u);
+    Motor *m = motorPtrs[canPos][motorPos];
+    if (m == nullptr) {   // 该 ID 没有对应的 Motor 对象
+        return;
+    }
+    m->feedback.angle = (int16_t)((canBuf[0] << 8u) | canBuf[1]);
+    m->feedback.speed = (int16_t)((canBuf[2] << 8u) | canBuf[3]);
+    m->feedback.moment = (int16_t)((canBuf[4] << 8u) | canBuf[5]);
+    m->feedback.temp = canBuf[6];
 }
 /**
  * @brief 用于设置电机速度，只用当电机控制类型对应时才有效

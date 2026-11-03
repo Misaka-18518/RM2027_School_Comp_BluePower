@@ -64,6 +64,8 @@ void ChassisStart(){
  * @callergraph void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) in Device.cpp
  */
 void ChassisHandle() {
+    // bus-off 自动恢复已在 Src/can.c 里用 AutoBusOff=ENABLE 交给硬件处理，
+    // 不要在 1ms 控制中断里手动进/出 CAN 初始化模式：会阻塞控制周期，也会把 HAL 状态机搞乱。
     if(ChassisStopFlag == 0) {
         WheelsSpeedCalc(FBVelocity, LRVelocity, RTVelocity);
     }

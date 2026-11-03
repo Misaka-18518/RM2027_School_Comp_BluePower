@@ -304,12 +304,13 @@ int main(void)
         static uint32_t lastDebugTick = 0;
         if (HAL_GetTick() - lastDebugTick >= 100u) {
             lastDebugTick = HAL_GetTick();
-            static char dbgBuf[160];
+            static char dbgBuf[224];
             uint32_t rcAge = (RemoteControl::lastFrameTick == 0u)
                              ? 0xFFFFFFFFu
                              : (HAL_GetTick() - RemoteControl::lastFrameTick);
+            uint32_t canEsr = hcan1.Instance->ESR;   // TEC/REC/BOFF：不接 ST-Link 也能看 CAN 物理层状态
             int len = snprintf(dbgBuf, sizeof(dbgBuf),
-                "RC age=%lu sL=%d sR=%d Lc=%d Rc=%d Lr=%d Rr=%d o0=%d o1=%d\r\n",
+                "RC age=%lu sL=%d sR=%d Lc=%d Rc=%d Lr=%d Rr=%d | IMU err=%u acc=0x%02X gyro=0x%02X | CAN TEC=%lu REC=%lu BOFF=%lu\r\n",
                 (unsigned long)rcAge,
                 (int)RemoteControl::rcInfo.sLeft,
                 (int)RemoteControl::rcInfo.sRight,
@@ -317,8 +318,12 @@ int main(void)
                 (int)(RemoteControl::rcInfo.right_col * 1000.0f),
                 (int)(RemoteControl::rcInfo.left_rol * 1000.0f),
                 (int)(RemoteControl::rcInfo.right_rol * 1000.0f),
-                (int)RemoteControl::rcInfo.optional[0],
-                (int)RemoteControl::rcInfo.optional[1]);
+                (unsigned)IMU::errorCode,
+                (unsigned)IMU::debugAccelId,
+                (unsigned)IMU::debugGyroId,
+                (unsigned long)((canEsr >> 16u) & 0xFFu),
+                (unsigned long)((canEsr >> 24u) & 0xFFu),
+                (unsigned long)((canEsr >> 2u) & 1u));
             if (len > 0) {
                 CDC_Transmit_FS((uint8_t *)dbgBuf, (uint16_t)len);
             }

@@ -16,7 +16,7 @@
 // 陀螺零偏校准后的静止死区（rad/s），小于该值视为 0，减少漂移
 #define IMU_GYRO_DEADBAND   (0.004f)
 
-// SPI1 时钟：官方例程默认 256 分频太慢，设为 16 分频（84MHz/16 = 5.25MHz）
+// SPI1 时钟：CubeMX 默认 256 分频太慢；64 分频 = 84MHz/64 ≈ 1.3MHz（BMI088 SPI 上限 10MHz）
 #define IMU_SPI_PRESCALER   SPI_BAUDRATEPRESCALER_64
 
 /* ============================ BMI088 寄存器 =========================== */
@@ -149,26 +149,23 @@ static void readGyroMulti(uint8_t reg, uint8_t *buf, uint8_t len)
 
 uint8_t IMU::initAccel_()
 {
-    // 先读 2 次芯片 ID，确认 SPI 通信正常（上电后第一次读可能无效）
+    // 上电后前两次读芯片 ID 只用于把加速度计从 I2C 切到 SPI，值不可信（官方例程同样丢弃不判）
+    (void)readAccelReg(BMI088_ACC_CHIP_ID);
+    HAL_Delay(2);
+    (void)readAccelReg(BMI088_ACC_CHIP_ID);
+    HAL_Delay(2);
+
+    // 软件复位
+    writeAccelReg(BMI088_ACC_SOFTRESET, 0xB6u);
+    HAL_Delay(BMI088_SOFTRESET_DELAY_MS);
+
+    // 复位后再读 2 次，以最后一次为准
     for (uint8_t i = 0u; i < 2u; ++i) {
         debugAccelId = readAccelReg(BMI088_ACC_CHIP_ID);
         HAL_Delay(2);
     }
     if (debugAccelId != BMI088_ACC_CHIP_ID_VALUE) {
         return 1u;
-    }
-
-    // 软件复位
-    writeAccelReg(BMI088_ACC_SOFTRESET, 0xB6u);
-    HAL_Delay(BMI088_SOFTRESET_DELAY_MS);
-
-    // 复位后再读 2 次确认
-    for (uint8_t i = 0u; i < 2u; ++i) {
-        debugAccelId = readAccelReg(BMI088_ACC_CHIP_ID);
-        HAL_Delay(2);
-    }
-    if (debugAccelId != BMI088_ACC_CHIP_ID_VALUE) {
-        return 2u;
     }
 
     writeAccelReg(BMI088_ACC_PWR_CTRL, BMI088_ACC_ENABLE_ACC_ON);
@@ -195,13 +192,11 @@ uint8_t IMU::initAccel_()
 
 uint8_t IMU::initGyro_()
 {
-    for (uint8_t i = 0u; i < 2u; ++i) {
-        debugGyroId = readGyroReg(BMI088_GYRO_CHIP_ID);
-        HAL_Delay(2);
-    }
-    if (debugGyroId != BMI088_GYRO_CHIP_ID_VALUE) {
-        return 11u;
-    }
+    // 同加速度计：复位前先读两次把接口切到 SPI，不判结果
+    (void)readGyroReg(BMI088_GYRO_CHIP_ID);
+    HAL_Delay(2);
+    (void)readGyroReg(BMI088_GYRO_CHIP_ID);
+    HAL_Delay(2);
 
     writeGyroReg(BMI088_GYRO_SOFTRESET, 0xB6u);
     HAL_Delay(BMI088_SOFTRESET_DELAY_MS);
@@ -211,7 +206,7 @@ uint8_t IMU::initGyro_()
         HAL_Delay(2);
     }
     if (debugGyroId != BMI088_GYRO_CHIP_ID_VALUE) {
-        return 12u;
+        return 11u;
     }
 
     writeGyroReg(BMI088_GYRO_RANGE, BMI088_GYRO_2000);
@@ -256,10 +251,18 @@ void IMU::Init()
     hspi1.Init.BaudRatePrescaler = IMU_SPI_PRESCALER;
     (void)HAL_SPI_Init(&hspi1);
 
-    // 2. 初始化加速度计与陀螺仪
-    uint8_t err = initAccel_();
-    if (err == 0u) {
-        err = initGyro_();
+    // 2. 初始化加速度计与陀螺仪：整轮失败就重试（官方例程是 while(BMI088_init())，
+    //    上电第一次 SPI 访问经常读不到芯片 ID，多试两次通常就能过）
+    uint8_t err = 0xFFu;
+    for (uint8_t attempt = 0u; attempt < 3u; ++attempt) {
+        err = initAccel_();
+        if (err == 0u) {
+            err = initGyro_();
+        }
+        if (err == 0u) {
+            break;
+        }
+        HAL_Delay(10);
     }
     errorCode = err;
     if (err != 0u) {

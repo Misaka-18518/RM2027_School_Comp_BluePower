@@ -47,7 +47,6 @@ extern CTRL_CONTROL_T   ctrlControl;
 
 /*外部函数声明-------------------------------------------------------------*/
 
-CTRL_ERROR_E CtrlStart(CTRL_CONTROL_T _ctrlControl);
-CTRL_ERROR_E CtrlHandle(CTRL_CONTROL_T _ctrlControl);
+void CtrlHandle();   // 实际实现是 void CtrlHandle()（无参），原型的旧版本对不上，已清理
 
 #endif //RM_FRAME_C_CONTROLTASK_H
