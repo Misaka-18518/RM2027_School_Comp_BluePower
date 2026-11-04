@@ -4,25 +4,28 @@
 #include "UserTask.h"
 
 PID_Regulator_t userPidRegulator = {
-        .kp = 60,
-        .ki = 0,
-        .kd = 0,
-        .componentKpMax = 10000,
-        .componentKiMax = 0,
-        .componentKdMax = 0,
-        .outputMax = 10000 //2006电机输出电流上限，可以调小，勿调大
+        .kp = USER_PID_KP,
+        .ki = USER_PID_KI,
+        .kd = USER_PID_KD,
+        .componentKpMax = USER_PID_KP_MAX,
+        .componentKiMax = USER_PID_KI_MAX,
+        .componentKdMax = USER_PID_KD_MAX,
+        .outputMax = USER_PID_OUT_MAX
 };
 
 MOTOR_INIT_t userMotorInit = {
         .speedPIDp = &userPidRegulator,
         .anglePIDp = nullptr,
-        ._motorID = MOTOR_ID_1,
-        .reductionRatio = 36.0f,
+        ._motorID = MOTOR_ID_1,   // 实际 ID 由下面构造函数传入 USER_MOTOR_ID 覆盖
+        .reductionRatio = USER_MOTOR_REDUCTION,
         .ctrlType = SPEED_Single,
 };
 
+// 编译期检查：Config.h 的 USER_MOTOR_ID 必须是 CAN1 ID5 对应的位掩码
+static_assert(USER_MOTOR_ID == MOTOR_ID_5, "Config.h: USER_MOTOR_ID 必须对应 MOTOR_ID_5");
+
 // 在这里初始化除了4个M3508轮电机之外的电机
-Motor UserMotor(MOTOR_ID_5,&userMotorInit);
+Motor UserMotor(USER_MOTOR_ID, &userMotorInit);
 
 /***
  * 在这里放入xxx.stop()即可使舵机,电机在遥控器急停挡位断电

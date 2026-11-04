@@ -4,8 +4,7 @@
 
 #include "Motor.h"
 
-// 零速停止死区：目标为 0 且轮子已慢于此转速时，直接输出 0（既主动刹车又不抖）
-#define MOTOR_STOP_DEADBAND_RPM   (4.0f)
+/* 零速停止死区 MOTOR_STOP_DEADBAND_RPM 已移到 Config.h（第 3 节） */
 
 Motor* Motor::motorPtrs[2][8] = {0};
 int16_t Motor::motor_intensity[16];
@@ -211,6 +210,13 @@ void Motor::Handle(){
     }
     MotorStateUpdate();
 
+    if (stopFlag == 1){
+        // 停车状态：清掉积分，避免下次启动带旧积分冲一下
+        speedPID.PIDInfo.errSum = 0.0f;
+        motor_intensity[GET_MOTOR_POS(deviceID)] = 0;
+        return;
+    }
+
     int16_t intensity = IntensityCalc();
 
     if (stopFlag == 1){
@@ -306,6 +312,7 @@ int16_t Motor::IntensityCalc(){
         case SPEED_Single:
             // 目标为 0 且轮子已接近停转 -> 输出 0，避免静止时 PID 噪声让轮子爬行
             if (fabsf(targetSpeed) < 0.1f && fabsf(state.speed) < MOTOR_STOP_DEADBAND_RPM) {
+                speedPID.PIDInfo.errSum = 0.0f;   // 已经停稳，清积分
                 return 0;
             }
             intensity = speedPID.PIDCalc(targetSpeed, state.speed);

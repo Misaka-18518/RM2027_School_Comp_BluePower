@@ -7,9 +7,7 @@
 
 #include "Device.h"
 
-#define SBUS_RX_BUF_NUM 36u
-#define RC_FRAME_LENGTH 25u
-#define RC_CH_VALUE_OFFSET 1024
+/* SBUS_RX_BUF_NUM / RC_FRAME_LENGTH / RC_CH_VALUE_OFFSET 已移到 Config.h */
 /*枚举类型定义------------------------------------------------------------*/
 typedef enum{
     UP_POS = 97u,MID_POS = 0u,DOWN_POS = 158u
@@ -37,10 +35,11 @@ typedef struct {
 typedef struct {
     float left_col,left_rol;
     float right_col,right_rol;
-    SWITCH_STATE_E sLeft;
+    SWITCH_STATE_E sLeft;        // 兼容旧代码，等于 sw[0]（CH5）
     uint32_t pat;
-    SWITCH_STATE_E sRight;
+    SWITCH_STATE_E sRight;       // 兼容旧代码，等于 sw[1]（CH6）
     int16_t optional[2];
+    SWITCH_STATE_E sw[4];        // CH5~CH8 四个开关的位置：sw[0]=CH5 ... sw[3]=CH8
 }RC_Info_t;
 /*类型定义----------------------------------------------------------------*/
 class RemoteControl : public Device {

@@ -17,6 +17,8 @@
 #include "usb_device.h"
 #include "gpio.h"
 
+#include "Config.h"   // 全车可调参数统一放在 userCode/Inc/Config.h
+
 
 #include <stdarg.h>
 #include <string.h>

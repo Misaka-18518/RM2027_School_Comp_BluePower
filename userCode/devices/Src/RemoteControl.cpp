@@ -52,6 +52,15 @@ void RemoteControl::init() {
 }
 
 
+/* 开关原始值(0~2047) → 位置：阈值见 Config.h（RC_SW_UP_THRESHOLD / RC_SW_DOWN_THRESHOLD）。
+ * 实测 ET08 三位开关 上=353 / 中=1024 / 下=1694；两档开关只会出现 上/下。 */
+static SWITCH_STATE_E rawToSwitch(uint32_t raw)
+{
+    if (raw < RC_SW_UP_THRESHOLD)   return UP_POS;
+    if (raw > RC_SW_DOWN_THRESHOLD) return DOWN_POS;
+    return MID_POS;
+}
+
 void RemoteControl::sbus_to_rc(const volatile uint8_t *sbus_buf) {
     // ===== 调试：解出 SBUS 全部 16 个通道原始值（0~2047），用于排查开关通道 =====
     debugCh[0]  = (sbus_buf[1] | (sbus_buf[2] << 8)) & 0x07ff;
@@ -88,13 +97,14 @@ void RemoteControl::sbus_to_rc(const volatile uint8_t *sbus_buf) {
     rcInfo.left_col = rc_ctrl.rc.ch[1]/671.0f;
     rcInfo.right_col = rc_ctrl.rc.ch[2]/671.0f;
     rcInfo.left_rol = rc_ctrl.rc.ch[3]/671.0f;
-    /* 三档开关按原始值区间判断（实测 SB/SC：上=353、中=1024、下=1694）
-     * 之前直接强转 1 字节枚举是取低字节凑巧匹配，换个遥控器就对不上，容易出
-     * “档位不动/急停失效”的问题，改为按区间判断更可靠。 */
-    rcInfo.sLeft  = (rc_ctrl.rc.s[0] < 700u)  ? UP_POS
-                  : (rc_ctrl.rc.s[0] > 1300u) ? DOWN_POS : MID_POS;
-    rcInfo.sRight = (rc_ctrl.rc.s[1] < 700u)  ? UP_POS
-                  : (rc_ctrl.rc.s[1] > 1300u) ? DOWN_POS : MID_POS;
+    /* 四个开关全部解成位置：sw[0]=CH5, sw[1]=CH6, sw[2]=CH7, sw[3]=CH8。
+     * 按原始值区间判断（实测 ET08：上=353、中=1024、下=1694），比直接强转枚举可靠。 */
+    rcInfo.sw[0] = rawToSwitch((uint32_t)rc_ctrl.rc.s[0]);
+    rcInfo.sw[1] = rawToSwitch((uint32_t)rc_ctrl.rc.s[1]);
+    rcInfo.sw[2] = rawToSwitch((uint32_t)rc_ctrl.rc.optional[0]);
+    rcInfo.sw[3] = rawToSwitch((uint32_t)rc_ctrl.rc.optional[1]);
+    rcInfo.sLeft  = rcInfo.sw[0];   // 兼容旧代码
+    rcInfo.sRight = rcInfo.sw[1];
     rcInfo.optional[0] = rc_ctrl.rc.optional[0];
     rcInfo.optional[1] = rc_ctrl.rc.optional[1];
 

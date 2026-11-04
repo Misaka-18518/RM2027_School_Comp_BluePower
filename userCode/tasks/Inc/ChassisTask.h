@@ -7,12 +7,10 @@
 #include "main.h"
 #include "Motor.h"
 
+/* 单位换算工具（不是可调参数） */
 #define RPM2RADpS(num)(num * (3.1415926f/30.0f))
 #define RADpS2RPM(num)(num / (3.1415926f/30.0f))
-#define WHEEL_DIAMETER             0.1525f//麦轮直径 m
-#define REDUCTION_RATIO 19.0f
-#define TRACK_WIDTH            0.40f //轮距
-#define WHEEL_BASE             0.38f //轴距
+/* 底盘几何/标定参数见 Config.h：WHEEL_DIAMETER / TRACK_WIDTH / WHEEL_BASE / ROTATION_CALIB */
 /*枚举类型定义------------------------------------------------------------*/
 
 /*

@@ -6,6 +6,7 @@
 #include "RemoteControl.h"
 #include "Motor.h"
 #include "IMU.h"
+#include "ControlTask.h"
 
 void aRGB_led_show(uint32_t aRGB){
     static uint8_t alpha;
@@ -302,15 +303,15 @@ int main(void)
         /* USER CODE BEGIN 3 */
         // ===== USB CDC 调试输出：每 100ms 打印一次遥控器解析结果 =====
         static uint32_t lastDebugTick = 0;
-        if (HAL_GetTick() - lastDebugTick >= 100u) {
+        if (HAL_GetTick() - lastDebugTick >= DEBUG_RC_PERIOD_MS) {
             lastDebugTick = HAL_GetTick();
-            static char dbgBuf[224];
+            static char dbgBuf[256];
             uint32_t rcAge = (RemoteControl::lastFrameTick == 0u)
                              ? 0xFFFFFFFFu
                              : (HAL_GetTick() - RemoteControl::lastFrameTick);
             uint32_t canEsr = hcan1.Instance->ESR;   // TEC/REC/BOFF：不接 ST-Link 也能看 CAN 物理层状态
             int len = snprintf(dbgBuf, sizeof(dbgBuf),
-                "RC age=%lu sL=%d sR=%d Lc=%d Rc=%d Lr=%d Rr=%d | IMU err=%u acc=0x%02X gyro=0x%02X | CAN TEC=%lu REC=%lu BOFF=%lu\r\n",
+                "RC age=%lu sL=%d sR=%d Lc=%d Rc=%d Lr=%d Rr=%d | SW=%d/%d/%d/%d | IMU err=%u acc=0x%02X gyro=0x%02X yaw10=%d | CAN TEC=%lu REC=%lu BOFF=%lu\r\n",
                 (unsigned long)rcAge,
                 (int)RemoteControl::rcInfo.sLeft,
                 (int)RemoteControl::rcInfo.sRight,
@@ -318,9 +319,14 @@ int main(void)
                 (int)(RemoteControl::rcInfo.right_col * 1000.0f),
                 (int)(RemoteControl::rcInfo.left_rol * 1000.0f),
                 (int)(RemoteControl::rcInfo.right_rol * 1000.0f),
+                (int)RemoteControl::rcInfo.sw[0],
+                (int)RemoteControl::rcInfo.sw[1],
+                (int)RemoteControl::rcInfo.sw[2],
+                (int)RemoteControl::rcInfo.sw[3],
                 (unsigned)IMU::errorCode,
                 (unsigned)IMU::debugAccelId,
                 (unsigned)IMU::debugGyroId,
+                (int)(IMU::getYaw() * 572.9578f),   // yaw 单位 0.1°
                 (unsigned long)((canEsr >> 16u) & 0xFFu),
                 (unsigned long)((canEsr >> 24u) & 0xFFu),
                 (unsigned long)((canEsr >> 2u) & 1u));
@@ -328,9 +334,45 @@ int main(void)
                 CDC_Transmit_FS((uint8_t *)dbgBuf, (uint16_t)len);
             }
         }
+        // ===== 底盘标定/测量模式结果（SB 上/下档触发，见 ControlTask.cpp）=====
+        if (measureResultFlag != 0u) {
+            uint8_t ev = measureResultFlag;
+            measureResultFlag = 0u;
+            static char measBuf[240];
+            int mlen = 0;
+            if (ev == 1u) {
+                int32_t d  = measStraightResult.measuredX100;
+                int32_t ad = (d < 0) ? -d : d;
+                mlen = snprintf(measBuf, sizeof(measBuf),
+                    "TEST STRAIGHT #%lu done: t=%lums nominal=%ldmm yawDrift=%s%d.%02lddeg | 卷尺量实际距离 L，则 WHEEL_DIAMETER = 0.1525*(L/2.000)\r\n",
+                    (unsigned long)measStraightResult.seq,
+                    (unsigned long)measStraightResult.elapsedMs,
+                    (long)measStraightResult.nominalMm,
+                    (d < 0) ? "-" : "+",
+                    (int)(ad / 100), (long)(ad % 100));
+            } else if (ev == 2u) {
+                int32_t d  = measRotateResult.measuredX100;
+                int32_t ad = (d < 0) ? -d : d;
+                int32_t k  = measRotateResult.kRealMm;
+                mlen = snprintf(measBuf, sizeof(measBuf),
+                    "TEST ROTATE #%lu done: t=%lums nominal=360.00deg actual=%s%d.%02lddeg | k建议=%ld.%03ldm（当前 0.390m），TRACK+WHEEL 建议 = %ld.%03ldm\r\n",
+                    (unsigned long)measRotateResult.seq,
+                    (unsigned long)measRotateResult.elapsedMs,
+                    (d < 0) ? "-" : "+",
+                    (int)(ad / 100), (long)(ad % 100),
+                    (long)(k / 1000), (long)(k % 1000),
+                    (long)((2 * k) / 1000), (long)((2 * k) % 1000));
+            } else {
+                mlen = snprintf(measBuf, sizeof(measBuf),
+                    "TEST: IMU 未就绪，无法做自转标定（先看 IMU err）\r\n");
+            }
+            if (mlen > 0) {
+                CDC_Transmit_FS((uint8_t *)measBuf, (uint16_t)mlen);
+            }
+        }
         // ===== USB CDC 调试输出：底盘 4 个电机的 目标/反馈/电流（50Hz，PID 调参用）=====
         static uint32_t lastMotorTick = 0;
-        if (HAL_GetTick() - lastMotorTick >= 20u) {
+        if (HAL_GetTick() - lastMotorTick >= DEBUG_MOTOR_PERIOD_MS) {
             lastMotorTick = HAL_GetTick();
             static char motorBuf[200];
             int mlen = 0;

@@ -4,20 +4,20 @@
 #include "ChassisTask.h"
 
 PID_Regulator_t pidRegulator = {//此为储存pid参数的结构体，四个底盘电机共用
-        .kp = 60,
-        .ki = 0,
-        .kd = 0,
-        .componentKpMax = 16384,
-        .componentKiMax = 0,
-        .componentKdMax = 0,
-        .outputMax = 16384 //3508电机输出电流上限，可以调小，勿调大
+        .kp = CHASSIS_PID_KP,
+        .ki = CHASSIS_PID_KI,
+        .kd = CHASSIS_PID_KD,
+        .componentKpMax = CHASSIS_PID_KP_MAX,
+        .componentKiMax = CHASSIS_PID_KI_MAX,
+        .componentKdMax = CHASSIS_PID_KD_MAX,
+        .outputMax = CHASSIS_PID_OUT_MAX
 };
 
 MOTOR_INIT_t chassisMotorInit = {//四个底盘电机共用的初始化结构体
         .speedPIDp = &pidRegulator,
         .anglePIDp = nullptr,
         ._motorID = MOTOR_ID_1,
-        .reductionRatio = 19.0f,
+        .reductionRatio = REDUCTION_RATIO,
         .ctrlType = SPEED_Single,
 };
 /* ==================== 底盘电机总线 ID 配置 ====================
@@ -28,14 +28,15 @@ MOTOR_INIT_t chassisMotorInit = {//四个底盘电机共用的初始化结构体
  *   BR 右后 = ID 4
  *
  * 说明：MOTOR_ID_1 ~ MOTOR_ID_8 对应 CAN1 上的 1~8 号电调；9~16 才走 CAN2。
- * 改 ID 只改下面四行；同时记得把电调本身的 ID 也设成一样的
+ * 改 ID 只改 Config.h 里的 CHASSIS_ID_FL/FR/BL/BR；同时记得把电调本身的 ID 也设成一样的
  * （RoboMaster Assistant 里改，或按电调上的 SET 键：短按进入 ID 模式，
  *   短按 N 次 = ID N，停 3 秒自动保存，重新上电生效）。
+ * 下面四个宏来自 Config.h / 由 CHASSIS_ID_x 对应 MOTOR_ID_x 的位掩码。
  */
-#define CHASSIS_ID_FL   MOTOR_ID_1
-#define CHASSIS_ID_FR   MOTOR_ID_2
-#define CHASSIS_ID_BL   MOTOR_ID_3
-#define CHASSIS_ID_BR   MOTOR_ID_4
+static_assert(CHASSIS_ID_FL == MOTOR_ID_1, "Config.h: CHASSIS_ID_FL 必须对应 MOTOR_ID_1");
+static_assert(CHASSIS_ID_FR == MOTOR_ID_2, "Config.h: CHASSIS_ID_FR 必须对应 MOTOR_ID_2");
+static_assert(CHASSIS_ID_BL == MOTOR_ID_3, "Config.h: CHASSIS_ID_BL 必须对应 MOTOR_ID_3");
+static_assert(CHASSIS_ID_BR == MOTOR_ID_4, "Config.h: CHASSIS_ID_BR 必须对应 MOTOR_ID_4");
 
 // 编译期检查：四个 ID 不能重复
 static_assert((CHASSIS_ID_FL & CHASSIS_ID_FR) == 0u, "底盘电机 ID 重复: FL / FR");
@@ -103,7 +104,7 @@ void WheelsSpeedCalc(float fbVelocity, float lrVelocity, float rtVelocity) {
     // ===================== 麦轮逆运动学（无头控制也走这里） =====================
     // 约定：fbVelocity 前为正(m/s)；lrVelocity 右为正(m/s)；rtVelocity 逆时针为正(RPM)
     // 车体坐标系：x 向前、y 向左
-    float omega = RPM2RADpS(rtVelocity);              // 自转角速度 rad/s，逆时针为正
+    float omega = RPM2RADpS(rtVelocity) * ROTATION_CALIB;   // 自转角速度 rad/s（乘实测标定系数），逆时针为正
     float vx = fbVelocity;                            // 向前 m/s
     float vy = -lrVelocity;                           // 向左 m/s（参数是右为正）
     const float k = (TRACK_WIDTH + WHEEL_BASE) * 0.5f; // 麦轮自转等效力臂，0.39 m

@@ -3,21 +3,10 @@
 //
 #include "IMU.h"
 #include "spi.h"
+#include "Config.h"   // 可调参数统一在 userCode/Inc/Config.h
 #include <math.h>
 
-/* ============================== 可调参数 ============================== */
-
-// 陀螺 Z 轴方向修正：默认逆时针(向左转)为正；如果实测方向相反，改成 -1.0f
-#define IMU_YAW_SIGN        (1.0f)
-
-// 零偏校准采样次数（1ms 一次，1000 次约 1 秒；校准时车必须完全静止）
-#define IMU_CALI_SAMPLES    1000
-
-// 陀螺零偏校准后的静止死区（rad/s），小于该值视为 0，减少漂移
-#define IMU_GYRO_DEADBAND   (0.004f)
-
-// SPI1 时钟：CubeMX 默认 256 分频太慢；64 分频 = 84MHz/64 ≈ 1.3MHz（BMI088 SPI 上限 10MHz）
-#define IMU_SPI_PRESCALER   SPI_BAUDRATEPRESCALER_64
+/* 可调参数（IMU_YAW_SIGN / IMU_CALI_SAMPLES / IMU_GYRO_DEADBAND / IMU_SPI_PRESCALER）见 Config.h 第 7 节 */
 
 /* ============================ BMI088 寄存器 =========================== */
 
